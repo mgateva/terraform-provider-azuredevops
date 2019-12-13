@@ -46,7 +46,7 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 }
 
 // Convert internal Terraform data structure to an AzDO data structure
-func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.ServiceEndpoint, *string) {
+func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.ServiceEndpoint, *string, error) {
 	configurations := d.Get("configuration").(*schema.Set).List()
 	configuration := configurations[0].(map[string]interface{})
 	parameters := configuration["parameters"].(map[string]interface{})
@@ -70,7 +70,7 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 	}
 	serviceEndpoint.Type = converter.String("kubernetes")
 	serviceEndpoint.Url = converter.String(d.Get("apiserver_url").(string))
-	return serviceEndpoint, projectID
+	return serviceEndpoint, projectID, nil
 }
 
 // Convert AzDO data structure to internal Terraform data structure
