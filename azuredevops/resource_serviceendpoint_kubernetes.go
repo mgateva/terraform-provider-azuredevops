@@ -2,11 +2,9 @@ package azuredevops
 
 import (
 	"fmt"
-
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/serviceendpoint"
-
 	crud "github.com/microsoft/terraform-provider-azuredevops/azuredevops/crud/serviceendpoint"
 
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/converter"
@@ -19,25 +17,53 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Required:    true,
 		Description: "URL to Kubernete's API-Server",
 	}
-	r.Schema["configuration"] = &schema.Schema{
+	r.Schema["authorization_type"] = &schema.Schema{
+		Type:         schema.TypeString,
+		Required:     true,
+		Description:  "Type of credentials to use",
+		ValidateFunc: validation.StringInSlice([]string{"AzureSubscription"}, false),
+	}
+	r.Schema["azure_subscription"] = &schema.Schema{
 		Type:        schema.TypeSet,
-		Required:    true,
-		Description: "Configuration of service endpoint",
-		MinItems:    1,
-		MaxItems:    1,
+		Optional:    true,
+		Description: "'AzureSubscription'-type of configuration",
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
-				"authorization_type": {
+				"azure_environment": {
+					Type:        schema.TypeString,
+					Required:    false,
+					Optional:    true,
+					Description: "type of azure cloud: AzureCloud",
+				},
+				"name": {
 					Type:        schema.TypeString,
 					Required:    true,
-					Description: "Type of credentials: KubeConfig, ServiceAccount, AzureSubscription",
+					Description: "name of aks-resource",
 				},
-				"parameters": {
-					Type:     schema.TypeMap,
-					Required: true,
-					Elem: &schema.Schema{
-						Type: schema.TypeString,
-					},
+				"subscription_id": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "id of azure subscription",
+				},
+				"subscription_name": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "name of azure subscription",
+				},
+				"tenant_id": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "id of aad-tenant",
+				},
+				"resourcegroup_id": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "id of resourcegroup",
+				},
+				"namespace": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "accessed namespace",
 				},
 			},
 		},
@@ -47,29 +73,33 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 
 // Convert internal Terraform data structure to an AzDO data structure
 func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.ServiceEndpoint, *string, error) {
-	configurations := d.Get("configuration").(*schema.Set).List()
-	configuration := configurations[0].(map[string]interface{})
-	parameters := configuration["parameters"].(map[string]interface{})
-
 	serviceEndpoint, projectID := crud.DoBaseExpansion(d)
-	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
-		Parameters: &map[string]string{
-			"azureEnvironment": parameters["azure_environment"].(string),
-			"azureTenantId":    parameters["tenant_id"].(string),
-		},
-		Scheme: converter.String("Kubernetes"),
-	}
-
-	clusterId := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", parameters["subscription_id"].(string), parameters["resourcegroup_id"].(string), parameters["aks_name"].(string))
-	serviceEndpoint.Data = &map[string]string{
-		"authorizationType":     configuration["authorization_type"].(string),
-		"azureSubscriptionId":   parameters["subscription_id"].(string),
-		"azureSubscriptionName": parameters["subscription_name"].(string),
-		"clusterId":             clusterId,
-		"namespace":             parameters["namespace"].(string),
-	}
 	serviceEndpoint.Type = converter.String("kubernetes")
 	serviceEndpoint.Url = converter.String(d.Get("apiserver_url").(string))
+
+	switch d.Get("authorization_type").(string) {
+	case "AzureSubscription":
+		configurationRaw := d.Get("azure_subscription").(*schema.Set).List()
+		configuration := configurationRaw[0].(map[string]interface{})
+
+		serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
+			Parameters: &map[string]string{
+				"azureEnvironment": configuration["azure_environment"].(string),
+				"azureTenantId":    configuration["tenant_id"].(string),
+			},
+			Scheme: converter.String("Kubernetes"),
+		}
+
+		clusterId := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", configuration["subscription_id"].(string), configuration["resourcegroup_id"].(string), configuration["name"].(string))
+		serviceEndpoint.Data = &map[string]string{
+			"authorizationType":     "AzureSubscription",
+			"azureSubscriptionId":   configuration["subscription_id"].(string),
+			"azureSubscriptionName": configuration["subscription_name"].(string),
+			"clusterId":             clusterId,
+			"namespace":             configuration["namespace"].(string),
+		}
+	}
+
 	return serviceEndpoint, projectID, nil
 }
 
