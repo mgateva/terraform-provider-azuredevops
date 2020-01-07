@@ -2,6 +2,7 @@ package azuredevops
 
 import (
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/serviceendpoint"
@@ -33,6 +34,7 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 					Type:        schema.TypeString,
 					Required:    false,
 					Optional:    true,
+					Default:     "AzureCloud",
 					Description: "type of azure cloud: AzureCloud",
 				},
 				"cluster_name": {
@@ -63,6 +65,7 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 				"namespace": {
 					Type:        schema.TypeString,
 					Required:    true,
+					Default:     "default",
 					Description: "accessed namespace",
 				},
 			},
