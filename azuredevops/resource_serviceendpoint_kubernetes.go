@@ -2,7 +2,6 @@ package azuredevops
 
 import (
 	"fmt"
-	"log"
 
 	"gopkg.in/yaml.v2"
 
@@ -25,7 +24,7 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Type:         schema.TypeString,
 		Required:     true,
 		Description:  "Type of credentials to use",
-		ValidateFunc: validation.StringInSlice([]string{"AzureSubscription", "Kubeconfig"}, false),
+		ValidateFunc: validation.StringInSlice([]string{"AzureSubscription", "Kubeconfig", "ServiceAccount"}, false),
 	}
 	r.Schema["azure_subscription"] = &schema.Schema{
 		Type:        schema.TypeSet,
@@ -93,13 +92,33 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 				"cluster_context": {
 					Type:        schema.TypeString,
 					Optional:    true,
-					Description: "Context of your cluser",
+					Description: "Context of your cluster",
 				},
 				"accept_untrusted_certs": {
 					Type:        schema.TypeBool,
 					Optional:    true,
 					Default:     true,
 					Description: "Enable this if your authentication uses untrusted certificates",
+				},
+			},
+		},
+	}
+	r.Schema["service_account"] = &schema.Schema{
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Description: "'ServiceAccount'-type of configuration",
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"azure_environment": {
+					Type:        schema.TypeString,
+					Optional:    true,
+					Default:     "AzureCloud",
+					Description: "type of azure cloud: AzureCloud",
+				},
+				"service_account_secret_yaml": {
+					Type:        schema.TypeString,
+					Required:    true,
+					Description: "Content of the yaml file defining the service account secret.",
 				},
 			},
 		},
@@ -139,7 +158,6 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 		configuration := configurationRaw[0].(map[string]interface{})
 
 		clusterContextInput := configuration["cluster_context"].(string)
-		log.Println(clusterContextInput)
 		if clusterContextInput == "" {
 			kubeConfigYAML := configuration["kube_config"].(string)
 			var kubeConfigYAMLUnmarshalled map[string]interface{}
@@ -163,6 +181,33 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 			"authorizationType":    "Kubeconfig",
 			"acceptUntrustedCerts": fmt.Sprintf("%v", configuration["accept_untrusted_certs"].(bool)),
 		}
+	case "ServiceAccount":
+		configurationRaw := d.Get("service_account").(*schema.Set).List()
+		configuration := configurationRaw[0].(map[string]interface{})
+		secretYAML := configuration["service_account_secret_yaml"].(string)
+		var secretYAMLUnmarshalled map[string]interface{}
+
+		err := yaml.Unmarshal([]byte(secretYAML), &secretYAMLUnmarshalled)
+		if err != nil {
+			panic(err)
+		}
+
+		secretYAMLData := secretYAMLUnmarshalled["data"].(map[interface{}]interface{})
+		apiToken := secretYAMLData["token"].(string)
+		serviceAccountCertificate := secretYAMLData["ca.crt"].(string)
+
+		serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
+			Parameters: &map[string]string{
+				"apiToken":                  apiToken,
+				"serviceAccountCertificate": serviceAccountCertificate,
+			},
+			Scheme: converter.String("Token"),
+		}
+
+		serviceEndpoint.Data = &map[string]string{
+			"authorizationType": "ServiceAccount",
+		}
+
 	}
 
 	return serviceEndpoint, projectID, nil
@@ -183,5 +228,8 @@ func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *s
 	case "Kubeconfig":
 		d.Set("accept_untrusted_certs", (*serviceEndpoint.Authorization.Parameters)["acceptUntrustedCerts"])
 		d.Set("kube_config", (*serviceEndpoint.Authorization.Parameters)["kubeconfig"])
+	case "ServiceAccount":
+		d.Set("apiToken", (*serviceEndpoint.Authorization.Parameters)["apiToken"])
+		d.Set("serviceAccountCertificate", (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"])
 	}
 }
