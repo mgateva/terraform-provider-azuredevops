@@ -2,6 +2,7 @@ package azuredevops
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -107,6 +108,16 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 					Type:        schema.TypeString,
 					Required:    true,
 					Description: "Content of the yaml file defining the service account secret.",
+					ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
+						v := val.(string)
+						stringCheckList := [3]string{"data", "token", "ca.crt"}
+						for _, element := range stringCheckList {
+							if !strings.Contains(v, element) {
+								errs = append(errs, fmt.Errorf("The service acount secret yaml does not contain '%v' field. Make sure that its present and try again", element))
+							}
+						}
+						return
+					},
 				},
 			},
 		},
