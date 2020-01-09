@@ -144,12 +144,12 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 			Scheme: converter.String("Kubernetes"),
 		}
 
-		clusterId := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", configuration["subscription_id"].(string), configuration["resourcegroup_id"].(string), configuration["cluster_name"].(string))
+		clusterID := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", configuration["subscription_id"].(string), configuration["resourcegroup_id"].(string), configuration["cluster_name"].(string))
 		serviceEndpoint.Data = &map[string]string{
 			"authorizationType":     "AzureSubscription",
 			"azureSubscriptionId":   configuration["subscription_id"].(string),
 			"azureSubscriptionName": configuration["subscription_name"].(string),
-			"clusterId":             clusterId,
+			"clusterId":             clusterID,
 			"namespace":             configuration["namespace"].(string),
 		}
 	case "Kubeconfig":
