@@ -11,4 +11,5 @@ require (
 	github.com/microsoft/azure-devops-go-api/azuredevops v0.0.0-20191018194956-273e55a7119a
 	github.com/stretchr/testify v1.3.0
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
+	gopkg.in/yaml.v2 v2.2.2
 )
