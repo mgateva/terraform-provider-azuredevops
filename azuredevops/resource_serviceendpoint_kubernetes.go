@@ -217,7 +217,7 @@ func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *s
 		d.Set("accept_untrusted_certs", (*serviceEndpoint.Authorization.Parameters)["acceptUntrustedCerts"])
 		d.Set("kube_config", (*serviceEndpoint.Authorization.Parameters)["kubeconfig"])
 	case "ServiceAccount":
-		d.Set("apiToken", (*serviceEndpoint.Authorization.Parameters)["apiToken"])
-		d.Set("serviceAccountCertificate", (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"])
+		d.Set("api_token", (*serviceEndpoint.Authorization.Parameters)["apiToken"])
+		d.Set("service_account_certificate", (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"])
 	}
 }
