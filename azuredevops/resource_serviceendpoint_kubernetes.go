@@ -162,7 +162,8 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 			var kubeConfigYAMLUnmarshalled map[string]interface{}
 			err := yaml.Unmarshal([]byte(kubeConfigYAML), &kubeConfigYAMLUnmarshalled)
 			if err != nil {
-				panic(err)
+				errResult := fmt.Errorf("kube_config contains an invalid YAML: %s", err)
+				return nil, nil, errResult
 			}
 			clusterContextInputList := kubeConfigYAMLUnmarshalled["contexts"].([]interface{})[0].(map[interface{}]interface{})
 			clusterContextInput = clusterContextInputList["name"].(string)
