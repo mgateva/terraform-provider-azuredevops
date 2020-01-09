@@ -15,6 +15,12 @@ import (
 
 func resourceServiceEndpointKubernetes() *schema.Resource {
 	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes)
+	r.Schema["azure_environment"] = &schema.Schema{
+		Type:        schema.TypeString,
+		Optional:    true,
+		Default:     "AzureCloud",
+		Description: "type of azure cloud: AzureCloud",
+	}
 	r.Schema["apiserver_url"] = &schema.Schema{
 		Type:        schema.TypeString,
 		Required:    true,
@@ -32,12 +38,6 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Description: "'AzureSubscription'-type of configuration",
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
-				"azure_environment": {
-					Type:        schema.TypeString,
-					Optional:    true,
-					Default:     "AzureCloud",
-					Description: "type of azure cloud: AzureCloud",
-				},
 				"cluster_name": {
 					Type:        schema.TypeString,
 					Required:    true,
@@ -78,12 +78,6 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Description: "'Kubeconfig'-type of configuration",
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
-				"azure_environment": {
-					Type:        schema.TypeString,
-					Optional:    true,
-					Default:     "AzureCloud",
-					Description: "type of azure cloud: AzureCloud",
-				},
 				"kube_config": {
 					Type:        schema.TypeString,
 					Required:    true,
@@ -109,12 +103,6 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Description: "'ServiceAccount'-type of configuration",
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
-				"azure_environment": {
-					Type:        schema.TypeString,
-					Optional:    true,
-					Default:     "AzureCloud",
-					Description: "type of azure cloud: AzureCloud",
-				},
 				"service_account_secret_yaml": {
 					Type:        schema.TypeString,
 					Required:    true,
