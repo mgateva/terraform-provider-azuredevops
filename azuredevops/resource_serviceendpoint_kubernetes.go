@@ -16,12 +16,6 @@ import (
 
 func resourceServiceEndpointKubernetes() *schema.Resource {
 	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes)
-	r.Schema["azure_environment"] = &schema.Schema{
-		Type:        schema.TypeString,
-		Optional:    true,
-		Default:     "AzureCloud",
-		Description: "type of azure cloud: AzureCloud",
-	}
 	r.Schema["apiserver_url"] = &schema.Schema{
 		Type:        schema.TypeString,
 		Required:    true,
@@ -39,6 +33,12 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 		Description: "'AzureSubscription'-type of configuration",
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
+				"azure_environment": {
+					Type:        schema.TypeString,
+					Optional:    true,
+					Default:     "AzureCloud",
+					Description: "type of azure cloud: AzureCloud",
+				},
 				"cluster_name": {
 					Type:        schema.TypeString,
 					Required:    true,
@@ -110,13 +110,13 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 					Description: "Content of the yaml file defining the service account secret.",
 					ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
 						v := val.(string)
-						stringCheckList := [3]string{"data", "token", "ca.crt"}
+						stringCheckList := [3]string{"data:", "token:", "ca.crt:"}
 						for _, element := range stringCheckList {
 							if !strings.Contains(v, element) {
 								errs = append(errs, fmt.Errorf("The service acount secret yaml does not contain '%v' field. Make sure that its present and try again", element))
 							}
 						}
-						return
+						return warns, errs
 					},
 				},
 			},
@@ -188,7 +188,8 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 
 		err := yaml.Unmarshal([]byte(secretYAML), &secretYAMLUnmarshalled)
 		if err != nil {
-			panic(err)
+			errResult := fmt.Errorf("service_account_secret_yaml contains an invalid YAML: %s", err)
+			return nil, nil, errResult
 		}
 
 		secretYAMLData := secretYAMLUnmarshalled["data"].(map[interface{}]interface{})
@@ -215,11 +216,11 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 // Convert AzDO data structure to internal Terraform data structure
 func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *serviceendpoint.ServiceEndpoint, projectID *string) {
 	crud.DoBaseFlattening(d, serviceEndpoint, projectID)
-	d.Set("azure_environment", (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"])
 	d.Set("authorization_type", (*serviceEndpoint.Data)["authorizationType"])
 
 	switch (*serviceEndpoint.Data)["authorizationType"] {
 	case "AzureSubscription":
+		d.Set("azure_environment", (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"])
 		d.Set("tenant_id", (*serviceEndpoint.Authorization.Parameters)["azureTenantId"])
 		d.Set("subscription_id", (*serviceEndpoint.Authorization.Parameters)["azureSubscriptionId"])
 		d.Set("subscription_name", (*serviceEndpoint.Authorization.Parameters)["azureSubscriptionName"])
