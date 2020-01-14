@@ -14,19 +14,7 @@ import (
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/converter"
 )
 
-func resourceServiceEndpointKubernetes() *schema.Resource {
-	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes)
-	r.Schema["apiserver_url"] = &schema.Schema{
-		Type:        schema.TypeString,
-		Required:    true,
-		Description: "URL to Kubernete's API-Server",
-	}
-	r.Schema["authorization_type"] = &schema.Schema{
-		Type:         schema.TypeString,
-		Required:     true,
-		Description:  "Type of credentials to use",
-		ValidateFunc: validation.StringInSlice([]string{"AzureSubscription", "Kubeconfig", "ServiceAccount"}, false),
-	}
+func makeSchemaAzureSubscription(r *schema.Resource) {
 	r.Schema["azure_subscription"] = &schema.Schema{
 		Type:        schema.TypeSet,
 		Optional:    true,
@@ -73,6 +61,9 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 			},
 		},
 	}
+}
+
+func makeSchemaKubeconfig(r *schema.Resource) {
 	r.Schema["kubeconfig"] = &schema.Schema{
 		Type:        schema.TypeSet,
 		Optional:    true,
@@ -98,6 +89,9 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 			},
 		},
 	}
+}
+
+func makeSchemaServiceAccount(r *schema.Resource) {
 	r.Schema["service_account"] = &schema.Schema{
 		Type:        schema.TypeSet,
 		Optional:    true,
@@ -122,6 +116,25 @@ func resourceServiceEndpointKubernetes() *schema.Resource {
 			},
 		},
 	}
+}
+
+func resourceServiceEndpointKubernetes() *schema.Resource {
+	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes)
+	r.Schema["apiserver_url"] = &schema.Schema{
+		Type:        schema.TypeString,
+		Required:    true,
+		Description: "URL to Kubernete's API-Server",
+	}
+	r.Schema["authorization_type"] = &schema.Schema{
+		Type:         schema.TypeString,
+		Required:     true,
+		Description:  "Type of credentials to use",
+		ValidateFunc: validation.StringInSlice([]string{"AzureSubscription", "Kubeconfig", "ServiceAccount"}, false),
+	}
+	makeSchemaAzureSubscription(r)
+	makeSchemaKubeconfig(r)
+	makeSchemaServiceAccount(r)
+
 	return r
 }
 
@@ -135,7 +148,6 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 	case "AzureSubscription":
 		configurationRaw := d.Get("azure_subscription").(*schema.Set).List()
 		configuration := configurationRaw[0].(map[string]interface{})
-
 		serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
 			Parameters: &map[string]string{
 				"azureEnvironment": configuration["azure_environment"].(string),
@@ -218,19 +230,70 @@ func expandServiceEndpointKubernetes(d *schema.ResourceData) (*serviceendpoint.S
 func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *serviceendpoint.ServiceEndpoint, projectID *string) {
 	crud.DoBaseFlattening(d, serviceEndpoint, projectID)
 	d.Set("authorization_type", (*serviceEndpoint.Data)["authorizationType"])
+	d.Set("apiserver_url", (*serviceEndpoint.Url))
 
 	switch (*serviceEndpoint.Data)["authorizationType"] {
 	case "AzureSubscription":
-		d.Set("azure_environment", (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"])
-		d.Set("tenant_id", (*serviceEndpoint.Authorization.Parameters)["azureTenantId"])
-		d.Set("subscription_id", (*serviceEndpoint.Authorization.Parameters)["azureSubscriptionId"])
-		d.Set("subscription_name", (*serviceEndpoint.Authorization.Parameters)["azureSubscriptionName"])
-		d.Set("namespace", (*serviceEndpoint.Authorization.Parameters)["namespace"])
+		azureSubscriptionResource := &schema.Resource{
+			Schema: map[string]*schema.Schema{},
+		}
+		makeSchemaAzureSubscription(azureSubscriptionResource)
+
+		clusterIDSplit := strings.Split((*serviceEndpoint.Data)["clusterId"], "/")
+		var clusterNameIndex int
+		var resourceGroupIDIndex int
+		for k, v := range clusterIDSplit {
+			if v == "resourcegroups" {
+				resourceGroupIDIndex = k + 1
+			}
+			if v == "managedClusters" {
+				clusterNameIndex = k + 1
+			}
+		}
+		configItems := []interface{}{
+			map[string]interface{}{
+				"azure_environment": (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"],
+				"tenant_id":         (*serviceEndpoint.Authorization.Parameters)["azureTenantId"],
+				"subscription_id":   (*serviceEndpoint.Data)["azureSubscriptionId"],
+				"subscription_name": (*serviceEndpoint.Data)["azureSubscriptionName"],
+				"cluster_name":      clusterIDSplit[clusterNameIndex],
+				"resourcegroup_id":  clusterIDSplit[resourceGroupIDIndex],
+				"namespace":         (*serviceEndpoint.Data)["namespace"],
+			},
+		}
+
+		azureSubscriptionSchemaSet := schema.NewSet(schema.HashResource(azureSubscriptionResource), configItems)
+		d.Set("azure_subscription", azureSubscriptionSchemaSet)
 	case "Kubeconfig":
-		d.Set("accept_untrusted_certs", (*serviceEndpoint.Authorization.Parameters)["acceptUntrustedCerts"])
-		d.Set("kube_config", (*serviceEndpoint.Authorization.Parameters)["kubeconfig"])
+		kubeconfigResource := &schema.Resource{
+			Schema: map[string]*schema.Schema{},
+		}
+		makeSchemaKubeconfig(kubeconfigResource)
+
+		configItems := []interface{}{
+			map[string]interface{}{
+				"kube_config":            (*serviceEndpoint.Authorization.Parameters)["kubeconfig"],
+				"cluster_context":        (*serviceEndpoint.Authorization.Parameters)["clusterContext"],
+				"accept_untrusted_certs": (*serviceEndpoint.Data)["acceptUntrustedCerts"],
+			},
+		}
+
+		kubeConfigSchemaSet := schema.NewSet(schema.HashResource(kubeconfigResource), configItems)
+		d.Set("kubeconfig", kubeConfigSchemaSet)
 	case "ServiceAccount":
-		d.Set("api_token", (*serviceEndpoint.Authorization.Parameters)["apiToken"])
-		d.Set("service_account_certificate", (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"])
+		serviceAccountResource := &schema.Resource{
+			Schema: map[string]*schema.Schema{},
+		}
+		makeSchemaServiceAccount(serviceAccountResource)
+
+		configItems := []interface{}{
+			map[string]interface{}{
+				"token":  (*serviceEndpoint.Authorization.Parameters)["apiToken"],
+				"ca_crt": (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"],
+			},
+		}
+
+		serviceAccountSchemaSet := schema.NewSet(schema.HashResource(serviceAccountResource), configItems)
+		d.Set("service_account", serviceAccountSchemaSet)
 	}
 }
