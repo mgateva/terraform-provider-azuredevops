@@ -115,7 +115,7 @@ func makeSchemaServiceAccount(r *schema.Resource) {
 }
 
 func resourceServiceEndpointKubernetes() *schema.Resource {
-	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes)
+	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointKubernetes, expandServiceEndpointKubernetes, true)
 	r.Schema["apiserver_url"] = &schema.Schema{
 		Type:        schema.TypeString,
 		Required:    true,

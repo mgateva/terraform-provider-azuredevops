@@ -15,7 +15,7 @@ const (
 )
 
 func resourceServiceEndpointGitHub() *schema.Resource {
-	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointGitHub, expandServiceEndpointGitHub)
+	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointGitHub, expandServiceEndpointGitHub, false)
 	r.Schema[githubSchemaKey] = &schema.Schema{
 		Type:             schema.TypeString,
 		Required:         true,

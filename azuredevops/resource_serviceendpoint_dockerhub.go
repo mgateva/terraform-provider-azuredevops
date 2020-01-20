@@ -35,7 +35,7 @@ func makeUnprotectedSchema(r *schema.Resource, keyName, envVarName, description 
 }
 
 func resourceServiceEndpointDockerHub() *schema.Resource {
-	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointDockerHub, expandServiceEndpointDockerHub)
+	r := crud.GenBaseServiceEndpointResource(flattenServiceEndpointDockerHub, expandServiceEndpointDockerHub, false)
 	makeUnprotectedSchema(r, "docker_username", "AZDO_DOCKERHUB_SERVICE_CONNECTION_USERNAME", "The DockerHub username which should be used.")
 	makeUnprotectedSchema(r, "docker_email", "AZDO_DOCKERHUB_SERVICE_CONNECTION_EMAIL", "The DockerHub email address which should be used.")
 	makeProtectedSchema(r, "docker_password", "AZDO_DOCKERHUB_SERVICE_CONNECTION_PASSWORD", "The DockerHub password which should be used.")

@@ -1,9 +1,13 @@
 package crudserviceendpoint
 
 import (
+	"context"
 	"fmt"
+
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/microsoft/azure-devops-go-api/azuredevops/build"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/serviceendpoint"
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/config"
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/converter"
@@ -14,9 +18,9 @@ type expandFunc func(d *schema.ResourceData) (*serviceendpoint.ServiceEndpoint, 
 
 //GenBaseServiceEndpointResource creates a Resource with the common parts
 // that all Service Endpoints require.
-func GenBaseServiceEndpointResource(f flatFunc, e expandFunc) *schema.Resource {
+func GenBaseServiceEndpointResource(f flatFunc, e expandFunc, allowAllPipelinesAccess bool) *schema.Resource {
 	return &schema.Resource{
-		Create: genServiceEndpointCreateFunc(f, e),
+		Create: genServiceEndpointCreateFunc(f, e, allowAllPipelinesAccess),
 		Read:   genServiceEndpointReadFunc(f),
 		Update: genServiceEndpointUpdateFunc(f, e),
 		Delete: genServiceEndpointDeleteFunc(e),
@@ -98,7 +102,33 @@ func updateServiceEndpoint(clients *config.AggregatedClient, endpoint *serviceen
 	return updatedServiceEndpoint, err
 }
 
-func genServiceEndpointCreateFunc(flatFunc flatFunc, expandFunc expandFunc) func(d *schema.ResourceData, m interface{}) error {
+func authorizeAllPipelines(clients *config.AggregatedClient, endpoint *serviceendpoint.ServiceEndpoint, project *string) error {
+	ctx := context.Background()
+
+	resourceRef := build.DefinitionResourceReference{
+		Authorized: to.BoolPtr(true),
+		Id:         to.StringPtr(endpoint.Id.String()),
+		Name:       endpoint.Name,
+		Type:       to.StringPtr("endpoint"),
+	}
+
+	resourceRefs := []build.DefinitionResourceReference{resourceRef}
+
+	createdResourceRefs, err := clients.BuildClient.AuthorizeProjectResources(ctx, build.AuthorizeProjectResourcesArgs{
+		Resources: &resourceRefs,
+		Project:   project,
+	})
+
+	fmt.Printf("Created %d refs", len(*createdResourceRefs))
+
+	if err != nil {
+		return fmt.Errorf("Error authorizing all pipelines to use service endpoint: %+v", err)
+	}
+
+	return nil
+}
+
+func genServiceEndpointCreateFunc(flatFunc flatFunc, expandFunc expandFunc, allowAllPipelinesAccess bool) func(d *schema.ResourceData, m interface{}) error {
 	return func(d *schema.ResourceData, m interface{}) error {
 		clients := m.(*config.AggregatedClient)
 		serviceEndpoint, projectID, err := expandFunc(d)
@@ -109,6 +139,11 @@ func genServiceEndpointCreateFunc(flatFunc flatFunc, expandFunc expandFunc) func
 		createdServiceEndpoint, err := createServiceEndpoint(clients, serviceEndpoint, projectID)
 		if err != nil {
 			return fmt.Errorf("Error creating service endpoint in Azure DevOps: %+v", err)
+		}
+
+		// authorize all pipelines on service connection
+		if allowAllPipelinesAccess {
+			authorizeAllPipelines(clients, createdServiceEndpoint, projectID)
 		}
 
 		flatFunc(d, createdServiceEndpoint, projectID)
