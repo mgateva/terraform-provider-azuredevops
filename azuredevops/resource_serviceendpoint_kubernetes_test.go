@@ -326,8 +326,15 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigUpdateDoesNotSwallowEr
 
 // verifies that the flatten/expand round trip yields the same service endpoint for autorization type "ServiceAccount"
 func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountExpandFlattenRoundtrip(t *testing.T) {
-	resourceData := schema.TestResourceDataRaw(t, resourceServiceEndpointKubernetes().Schema, nil)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
+	resourceData := schema.TestResourceDataRaw(t, resourceServiceEndpointKubernetes().Schema, nil)
+	if key := (*kubernetesTestServiceEndpointForServiceAccount.Authorization.Parameters)["apiToken"]; key != "" {
+		resourceData.Set("service_account", []map[string]interface{}{{"token_hash": key}})
+	}
+	if key := (*kubernetesTestServiceEndpointForServiceAccount.Authorization.Parameters)["serviceAccountCertificate"]; key != "" {
+		resourceData.Set("service_account", []map[string]interface{}{{"ca_cert_hash": key}})
+	}
+
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
 	serviceEndpointAfterRoundTrip, projectID, err := expandServiceEndpointKubernetes(resourceData)
