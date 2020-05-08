@@ -68,8 +68,29 @@ func createkubernetesTestServiceEndpointForKubeconfig() *serviceendpoint.Service
 	serviceEndpoint := kubernetesTestServiceEndpoint
 	serviceEndpoint.Authorization.Scheme = converter.String("Kubernetes")
 	serviceEndpoint.Authorization.Parameters = &map[string]string{
-		"clusterContext": "kubernetes_TEST_cluster_context",
-		"kubeconfig":     "kubernetes_TEST_tenant_id",
+		"kubeconfig": `<<EOT
+							apiVersion: v1
+							clusters:
+							- cluster:
+							certificate-authority: fake-ca-file
+							server: https://1.2.3.4
+							name: development
+							contexts:
+							- context:
+							cluster: development
+							namespace: frontend
+							user: developer
+							name: dev-frontend
+							current-context: dev-frontend
+							kind: Config
+							preferences: {}
+							users:
+							- name: developer
+							user:
+							client-certificate: fake-cert-file
+							client-key: fake-key-file
+							EOT`,
+		"clusterContext": "dev-frontend",
 	}
 	serviceEndpoint.Data = &map[string]string{
 		"authorizationType":    "Kubeconfig",
@@ -214,6 +235,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForAzureSubscriptionUpdateDoesNotSw
 // verifies that the flatten/expand round trip yields the same service endpoint for autorization type "Kubeconfig"
 func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigExpandFlattenRoundtrip(t *testing.T) {
 	resourceData := schema.TestResourceDataRaw(t, resourceServiceEndpointKubernetes().Schema, nil)
+	configureKubeconfig(resourceData)
 	kubernetesTestServiceEndpointForKubeconfig := createkubernetesTestServiceEndpointForKubeconfig()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForKubeconfig, kubernetesTestServiceEndpointProjectID)
 
@@ -230,6 +252,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigCreateDoesNotSwallowEr
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureKubeconfig(resourceData)
 	kubernetesTestServiceEndpointForKubeconfig := createkubernetesTestServiceEndpointForKubeconfig()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForKubeconfig, kubernetesTestServiceEndpointProjectID)
 
@@ -254,6 +277,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigReadDoesNotSwallowErro
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureKubeconfig(resourceData)
 	kubernetesTestServiceEndpointForKubeconfig := createkubernetesTestServiceEndpointForKubeconfig()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForKubeconfig, kubernetesTestServiceEndpointProjectID)
 
@@ -278,6 +302,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigDeleteDoesNotSwallowEr
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureKubeconfig(resourceData)
 	kubernetesTestServiceEndpointForKubeconfig := createkubernetesTestServiceEndpointForKubeconfig()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForKubeconfig, kubernetesTestServiceEndpointProjectID)
 
@@ -302,6 +327,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigUpdateDoesNotSwallowEr
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureKubeconfig(resourceData)
 	kubernetesTestServiceEndpointForKubeconfig := createkubernetesTestServiceEndpointForKubeconfig()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForKubeconfig, kubernetesTestServiceEndpointProjectID)
 
@@ -327,6 +353,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForKubeconfigUpdateDoesNotSwallowEr
 // verifies that the flatten/expand round trip yields the same service endpoint for autorization type "ServiceAccount"
 func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountExpandFlattenRoundtrip(t *testing.T) {
 	resourceData := schema.TestResourceDataRaw(t, resourceServiceEndpointKubernetes().Schema, nil)
+	configureServiceAccount(resourceData)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
@@ -344,6 +371,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountCreateDoesNotSwall
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureServiceAccount(resourceData)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
@@ -368,6 +396,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountReadDoesNotSwallow
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureServiceAccount(resourceData)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
@@ -392,6 +421,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountDeleteDoesNotSwall
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureServiceAccount(resourceData)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
@@ -416,6 +446,7 @@ func TestAzureDevOpsServiceEndpointKubernetesForServiceAccountUpdateDoesNotSwall
 
 	r := resourceServiceEndpointKubernetes()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
+	configureServiceAccount(resourceData)
 	kubernetesTestServiceEndpointForServiceAccount := createkubernetesTestServiceEndpointForServiceAccount()
 	flattenServiceEndpointKubernetes(resourceData, kubernetesTestServiceEndpointForServiceAccount, kubernetesTestServiceEndpointProjectID)
 
@@ -573,6 +604,46 @@ func getServiceEndpointKubernetesFromResource(resource *terraform.ResourceState)
 	return clients.ServiceEndpointClient.GetServiceEndpointDetails(clients.Ctx, serviceendpoint.GetServiceEndpointDetailsArgs{
 		Project:    &projectID,
 		EndpointId: &serviceEndpointDefID,
+	})
+}
+
+func configureServiceAccount(d *schema.ResourceData) {
+	d.Set("service_account", &[]map[string]interface{}{
+		{
+			"token":   "kubernetes_TEST_api_token",
+			"ca_cert": "kubernetes_TEST_ca_cert",
+		},
+	})
+}
+
+func configureKubeconfig(d *schema.ResourceData) {
+	d.Set("kubeconfig", &[]map[string]interface{}{
+		{
+			"kube_config": `<<EOT
+							apiVersion: v1
+							clusters:
+							- cluster:
+							certificate-authority: fake-ca-file
+							server: https://1.2.3.4
+							name: development
+							contexts:
+							- context:
+							cluster: development
+							namespace: frontend
+							user: developer
+							name: dev-frontend
+							current-context: dev-frontend
+							kind: Config
+							preferences: {}
+							users:
+							- name: developer
+							user:
+							client-certificate: fake-cert-file
+							client-key: fake-key-file
+							EOT`,
+			"accept_untrusted_certs": true,
+			"cluster_context":        "dev-frontend",
+		},
 	})
 }
 
