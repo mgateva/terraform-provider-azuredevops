@@ -2,6 +2,8 @@ package azuredevops
 
 import (
 	"fmt"
+	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/tfhelper"
+	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/utils/validate"
 	"strconv"
 	"strings"
 
@@ -79,6 +81,11 @@ func makeSchemaAzureSubscription(r *schema.Resource) {
 func makeSchemaKubeconfig(r *schema.Resource) {
 	resourceElemSchema := &schema.Resource{
 		Schema: map[string]*schema.Schema{
+			"kube_config": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Content of the kubeconfig file. The configuration information in your kubeconfig file allows Kubernetes clients to talk to your Kubernetes API servers. This file is used by kubectl and all supported Kubernetes clients.",
+			},
 			"cluster_context": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -105,24 +112,29 @@ func makeSchemaServiceAccount(r *schema.Resource) {
 	resourceElemSchema := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"ca_cert": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Service account certificate",
+				Type:         schema.TypeString,
+				Sensitive:    true,
+				Optional:     true,
+				Description:  "Service account certificate",
+				ValidateFunc: validate.NoEmptyStrings,
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					return true
 				},
 			},
 			"token": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Token",
+				Type:         schema.TypeString,
+				Sensitive:    true,
+				Optional:     true,
+				Description:  "Token",
+				ValidateFunc: validate.NoEmptyStrings,
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					return true
 				},
 			},
 		},
 	}
-	//crud.MakeProtectedSchema(r, "token", "AZDO_KUBERNETES_SERVICE_CONNECTION_SERVICE_ACCOUNT_TOKEN", "Secret token")
+	crud.MakeProtectedSchema(resourceElemSchema, "ca_cert", "AZDO_KUBERNETES_SERVICE_CONNECTION_SERVICE_ACCOUNT_CERT", "Secret cert")
+	crud.MakeProtectedSchema(resourceElemSchema, "token", "AZDO_KUBERNETES_SERVICE_CONNECTION_SERVICE_ACCOUNT_TOKEN", "Secret token")
 	r.Schema[resourceBlockServiceAccount] = &schema.Schema{
 		Type:        schema.TypeSet,
 		Optional:    true,
@@ -235,11 +247,6 @@ func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *s
 
 	switch (*serviceEndpoint.Data)[serviceEndpointDataAttrAuthType] {
 	case "AzureSubscription":
-		azureSubscriptionResource := &schema.Resource{
-			Schema: map[string]*schema.Schema{},
-		}
-		makeSchemaAzureSubscription(azureSubscriptionResource)
-
 		clusterIDSplit := strings.Split((*serviceEndpoint.Data)["clusterId"], "/")
 		var clusterNameIndex int
 		var resourceGroupIDIndex int
@@ -251,51 +258,52 @@ func flattenServiceEndpointKubernetes(d *schema.ResourceData, serviceEndpoint *s
 				clusterNameIndex = k + 1
 			}
 		}
-		configItems := []interface{}{
-			map[string]interface{}{
-				"azure_environment": (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"],
-				"tenant_id":         (*serviceEndpoint.Authorization.Parameters)["azureTenantId"],
-				"subscription_id":   (*serviceEndpoint.Data)["azureSubscriptionId"],
-				"subscription_name": (*serviceEndpoint.Data)["azureSubscriptionName"],
-				"cluster_name":      clusterIDSplit[clusterNameIndex],
-				"resourcegroup_id":  clusterIDSplit[resourceGroupIDIndex],
-				"namespace":         (*serviceEndpoint.Data)["namespace"],
-			},
+		configItems := map[string]interface{}{
+			"azure_environment": (*serviceEndpoint.Authorization.Parameters)["azureEnvironment"],
+			"tenant_id":         (*serviceEndpoint.Authorization.Parameters)["azureTenantId"],
+			"subscription_id":   (*serviceEndpoint.Data)["azureSubscriptionId"],
+			"subscription_name": (*serviceEndpoint.Data)["azureSubscriptionName"],
+			"cluster_name":      clusterIDSplit[clusterNameIndex],
+			"resourcegroup_id":  clusterIDSplit[resourceGroupIDIndex],
+			"namespace":         (*serviceEndpoint.Data)["namespace"],
 		}
+		configItemList := make([]map[string]interface{}, 1)
+		configItemList[0] = configItems
 
-		azureSubscriptionSchemaSet := schema.NewSet(schema.HashResource(azureSubscriptionResource), configItems)
-		d.Set(resourceBlockAzSubscription, azureSubscriptionSchemaSet)
+		d.Set(resourceBlockAzSubscription, configItemList)
 	case "Kubeconfig":
-		kubeconfigResource := &schema.Resource{
-			Schema: map[string]*schema.Schema{},
-		}
-		makeSchemaKubeconfig(kubeconfigResource)
+		var kubeconfig map[string]interface{}
+		kubeconfigSet := d.Get("kubeconfig").(*schema.Set).List()
 
+		configuration := kubeconfigSet[0].(map[string]interface{})
+		newHashKubeconfig, hashKeyKubeconfig := tfhelper.HelpFlattenSecretNested(d, resourceBlockKubeconfig, configuration, "kube_config")
 		acceptUntrustedCerts, _ := strconv.ParseBool((*serviceEndpoint.Data)["acceptUntrustedCerts"])
-		configItems := []interface{}{
-			map[string]interface{}{
-				"kube_config":            (*serviceEndpoint.Authorization.Parameters)["kubeconfig"],
-				"cluster_context":        (*serviceEndpoint.Authorization.Parameters)["clusterContext"],
-				"accept_untrusted_certs": acceptUntrustedCerts,
-			},
+		kubeconfig = map[string]interface{}{
+			"kube_config":            configuration["kube_config"].(string),
+			"cluster_context":        (*serviceEndpoint.Authorization.Parameters)["clusterContext"],
+			"accept_untrusted_certs": acceptUntrustedCerts,
+			hashKeyKubeconfig:        newHashKubeconfig,
 		}
 
-		kubeConfigSchemaSet := schema.NewSet(schema.HashResource(kubeconfigResource), configItems)
-		d.Set(resourceBlockKubeconfig, kubeConfigSchemaSet)
+		kubeconfigList := make([]map[string]interface{}, 1)
+		kubeconfigList[0] = kubeconfig
+		d.Set(resourceBlockKubeconfig, kubeconfigList)
 	case "ServiceAccount":
-		serviceAccountResource := &schema.Resource{
-			Schema: map[string]*schema.Schema{},
-		}
-		makeSchemaServiceAccount(serviceAccountResource)
+		var serviceAccount map[string]interface{}
+		serviceAccountSet := d.Get("service_account").(*schema.Set).List()
 
-		configItems := []interface{}{
-			map[string]interface{}{
-				"token":   (*serviceEndpoint.Authorization.Parameters)["apiToken"],
-				"ca_cert": (*serviceEndpoint.Authorization.Parameters)["serviceAccountCertificate"],
-			},
+		configuration := serviceAccountSet[0].(map[string]interface{})
+		newHashToken, hashKeyToken := tfhelper.HelpFlattenSecretNested(d, resourceBlockServiceAccount, configuration, "token")
+		newHashCert, hashKeyCert := tfhelper.HelpFlattenSecretNested(d, resourceBlockServiceAccount, configuration, "ca_cert")
+		serviceAccount = map[string]interface{}{
+			"token":      configuration["token"].(string),
+			"ca_cert":    configuration["ca_cert"].(string),
+			hashKeyToken: newHashToken,
+			hashKeyCert:  newHashCert,
 		}
 
-		serviceAccountSchemaSet := schema.NewSet(schema.HashResource(serviceAccountResource), configItems)
-		d.Set(resourceBlockServiceAccount, serviceAccountSchemaSet)
+		serviceAccountList := make([]map[string]interface{}, 1)
+		serviceAccountList[0] = serviceAccount
+		d.Set(resourceBlockServiceAccount, serviceAccountList)
 	}
 }
